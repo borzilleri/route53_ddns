@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Route53 DDNS</title>
+  <style>
+    :root {
+      font-family: system-ui, sans-serif;
+      line-height: 1.5;
+      color: #1a1a1a;
+      background: #f6f7f9;
+    }
+    body { margin: 0; padding: 1.5rem; max-width: 960px; margin-inline: auto; }
+    h1 { font-size: 1.35rem; margin-top: 0; }
+    .meta { background: #fff; border: 1px solid #e2e4e8; border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.25rem; }
+    .meta dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1.25rem; margin: 0; }
+    .meta dt { color: #555; }
+    .meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+    table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e4e8; border-radius: 8px; overflow: hidden; }
+    th, td { text-align: left; padding: 0.65rem 0.85rem; border-bottom: 1px solid #eee; font-variant-numeric: tabular-nums; }
+    th { background: #fafbfc; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: #444; }
+    tr:last-child td { border-bottom: none; }
+    button { padding: 0.4rem 0.85rem; border-radius: 6px; border: 1px solid #2563eb; background: #2563eb; color: #fff; font: inherit; cursor: pointer; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; border-color: #9ca3af; background: #9ca3af; }
+    .err { color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>Route53 dynamic DNS</h1>
+
+  {% if last_error %}
+  <p class="err">{{ last_error }}</p>
+  {% endif %}
+
+  <section class="meta">
+    <dl>
+      <dt>Current public IPv4</dt>
+      <dd>{{ current_public_ip or "—" }}</dd>
+      <dt>Last check</dt>
+      <dd>{% if last_check_at %}{{ last_check_at.isoformat() }}{% else %}—{% endif %}</dd>
+      <dt>Next check</dt>
+      <dd>{% if next_check_at %}{{ next_check_at.isoformat() }}{% else %}—{% endif %}</dd>
+    </dl>
+  </section>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Record</th>
+        <th>Public IP</th>
+        <th>IP in Route53</th>
+        <th>Last DNS update</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      {% set in_sync = current_public_ip and r.route53_ip and current_public_ip == r.route53_ip %}
+      <tr>
+        <td><code>{{ r.record_name }}</code></td>
+        <td>{{ current_public_ip or "—" }}</td>
+        <td>{{ r.route53_ip or "—" }}</td>
+        <td>{% if r.last_dns_update_at %}{{ r.last_dns_update_at.isoformat() }}{% else %}—{% endif %}</td>
+        <td>
+          <form method="post" action="/records/{{ r.index }}/update">
+            <button type="submit" {% if in_sync %}disabled{% endif %}>Update</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>
