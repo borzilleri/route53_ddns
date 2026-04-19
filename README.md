@@ -153,7 +153,3 @@ The web UI has **no authentication**. Anyone who can reach the port can read IPs
 ```bash
 pytest
 ```
-
-## License
-
-Add your license as needed.
