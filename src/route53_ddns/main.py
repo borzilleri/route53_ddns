@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from route53_ddns.config import Settings, clear_settings_cache, get_settings
+from route53_ddns.config import FileConfig, Settings, clear_settings_cache, get_settings, load_file_config
 from route53_ddns.logging_config import setup_logging
 from route53_ddns.poller import manual_update_all, manual_update_index, poller_loop
 from route53_ddns.route53_ops import verify_credentials
@@ -23,9 +23,9 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
-def build_app(settings: Settings) -> FastAPI:
-    records_cfg = settings.load_records()
-    state = AppState(poll_interval_seconds=settings.poll_interval_seconds)
+def build_app(settings: Settings, file_config: FileConfig) -> FastAPI:
+    records_cfg = file_config.records
+    state = AppState(poll_interval_seconds=file_config.poll_interval_seconds)
     for i, rc in enumerate(records_cfg):
         state.records.append(RecordRuntime(index=i, config=rc))
 
@@ -48,9 +48,9 @@ def build_app(settings: Settings) -> FastAPI:
             follow_redirects=True,
         )
         poller_task = asyncio.create_task(
-            poller_loop(http_client, settings, state, stop_event),
+            poller_loop(http_client, file_config, state, stop_event),
         )
-        logger.info("Started poller (interval=%ss)", settings.poll_interval_seconds)
+        logger.info("Started poller (interval=%ss)", file_config.poll_interval_seconds)
         yield
         if stop_event:
             stop_event.set()
@@ -73,6 +73,11 @@ def build_app(settings: Settings) -> FastAPI:
             ctx = state.snapshot_for_template()
         return templates.TemplateResponse(request, "index.html", ctx)
 
+    @app.get("/api/status")
+    async def api_status() -> dict:
+        async with state.lock:
+            return state.status_api_dict()
+
     @app.post("/records/{index}/update")
     async def trigger_update(index: int) -> RedirectResponse:
         if http_client is None:
@@ -81,7 +86,7 @@ def build_app(settings: Settings) -> FastAPI:
             await manual_update_index(
                 http_client,
                 state,
-                settings.checkip_url,
+                file_config.checkip_url,
                 index,
             )
         except IndexError as e:
@@ -95,7 +100,7 @@ def build_app(settings: Settings) -> FastAPI:
         await manual_update_all(
             http_client,
             state,
-            settings.checkip_url,
+            file_config.checkip_url,
         )
         return RedirectResponse(url="/", status_code=303)
 
@@ -103,7 +108,9 @@ def build_app(settings: Settings) -> FastAPI:
 
 
 def create_app() -> FastAPI:
-    return build_app(get_settings())
+    settings = get_settings()
+    file_config = load_file_config(settings.resolved_config_path())
+    return build_app(settings, file_config)
 
 
 def run() -> None:

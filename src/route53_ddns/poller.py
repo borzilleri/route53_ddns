@@ -4,15 +4,12 @@ import asyncio
 import ipaddress
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING
-
 import httpx
 
+from route53_ddns.config import FileConfig, api_host_label
+from route53_ddns.notifications import send_poll_cycle_notification
 from route53_ddns.route53_ops import get_route53_client, list_a_record_ip, upsert_a_and_txt
 from route53_ddns.state import AppState, utcnow
-
-if TYPE_CHECKING:
-    from route53_ddns.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -77,14 +74,30 @@ async def apply_update_at(
     )
 
 
+async def _notify_poll_cycle(
+    apprise_urls: list[str],
+    updated_hosts: list[str],
+    errors: list[str],
+) -> None:
+    if not apprise_urls or (not updated_hosts and not errors):
+        return
+    await asyncio.to_thread(
+        send_poll_cycle_notification,
+        apprise_urls,
+        updated_hosts,
+        errors,
+    )
+
+
 async def poll_cycle(
     http: httpx.AsyncClient,
-    settings: "Settings",
+    file_config: FileConfig,
     state: AppState,
-    checkip_url: str,
 ) -> None:
     r53 = get_route53_client()
     interval = state.poll_interval_seconds
+    checkip_url = file_config.checkip_url
+    apprise_urls = file_config.notifications.apprise_urls
 
     try:
         public_ip = await fetch_public_ip(http, checkip_url)
@@ -96,12 +109,16 @@ async def poll_cycle(
             state.last_error = msg
             state.last_check_at = now
             state.next_check_at = next_scheduled(now, interval)
+        await _notify_poll_cycle(apprise_urls, [], [msg])
         return
 
     async with state.lock:
         state.current_public_ip = public_ip
         state.last_error = None
         n = len(state.records)
+
+    cycle_errors: list[str] = []
+    updated_hosts: list[str] = []
 
     for idx in range(n):
         try:
@@ -111,6 +128,9 @@ async def poll_cycle(
             needs = aws_ip is None or aws_ip != public_ip
             if needs:
                 await apply_update_at(r53, state, idx, public_ip)
+                async with state.lock:
+                    hn = api_host_label(state.records[idx].config.record_name)
+                updated_hosts.append(hn)
             else:
                 async with state.lock:
                     name = state.records[idx].config.record_name
@@ -120,7 +140,9 @@ async def poll_cycle(
                     public_ip,
                 )
         except Exception as e:  # noqa: BLE001
+            err_s = f"record index {idx}: {e}"
             logger.error("record index %s: %s", idx, e, exc_info=True)
+            cycle_errors.append(err_s)
             async with state.lock:
                 state.last_error = str(e)
 
@@ -128,6 +150,8 @@ async def poll_cycle(
     async with state.lock:
         state.last_check_at = done
         state.next_check_at = next_scheduled(done, interval)
+
+    await _notify_poll_cycle(apprise_urls, updated_hosts, cycle_errors)
 
 
 async def manual_update_index(
@@ -208,14 +232,13 @@ async def manual_update_all(
 
 async def poller_loop(
     http: httpx.AsyncClient,
-    settings: "Settings",
+    file_config: FileConfig,
     state: AppState,
     stop: asyncio.Event,
 ) -> None:
-    interval = settings.poll_interval_seconds
-    checkip_url = settings.checkip_url
+    interval = file_config.poll_interval_seconds
     while not stop.is_set():
-        await poll_cycle(http, settings, state, checkip_url)
+        await poll_cycle(http, file_config, state)
         try:
             await asyncio.wait_for(stop.wait(), timeout=interval)
         except TimeoutError:

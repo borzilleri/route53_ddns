@@ -5,7 +5,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HOST=0.0.0.0 \
-    PORT=8080
+    PORT=8080 \
+    CONFIG_FILE=/config.yaml
 
 COPY pyproject.toml README.md ./
 COPY src ./src

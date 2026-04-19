@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from route53_ddns.config import Route53RecordConfig
 
-from route53_ddns.config import DEFAULT_POLL_INTERVAL_SECONDS
+from route53_ddns.config import DEFAULT_POLL_INTERVAL_SECONDS, api_host_label
 
 
 def record_needs_update(
@@ -70,4 +70,23 @@ class AppState:
             "records": rows,
             "last_error": self.last_error,
             "any_row_out_of_date": any_row_out_of_date,
+        }
+
+    def status_api_dict(self) -> dict:
+        """JSON-serializable status for GET /api/status (call under lock)."""
+        record_rows: list[dict] = []
+        last_any: datetime | None = None
+        for r in self.records:
+            lu = r.last_dns_update_at
+            if lu is not None and (last_any is None or lu > last_any):
+                last_any = lu
+            record_rows.append(
+                {
+                    "host": api_host_label(r.config.record_name),
+                    "lastUpdated": lu.isoformat() if lu is not None else None,
+                }
+            )
+        return {
+            "lastUpdated": last_any.isoformat() if last_any is not None else None,
+            "records": record_rows,
         }

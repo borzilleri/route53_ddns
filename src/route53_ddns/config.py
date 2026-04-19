@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import yaml
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +18,11 @@ def default_txt_record_name(a_record_fqdn: str) -> str:
     if not name:
         raise ValueError("empty record name")
     return f"_ddns-last-update.{name}."
+
+
+def api_host_label(record_name: str) -> str:
+    """Hostname/FQDN for API display (strip trailing dot from Route53 FQDN)."""
+    return record_name.strip().rstrip(".")
 
 
 class Route53RecordConfig(BaseModel):
@@ -45,7 +50,28 @@ class Route53RecordConfig(BaseModel):
         return default_txt_record_name(self.record_name)
 
 
+class NotificationsConfig(BaseModel):
+    """Apprise notification targets (see https://github.com/caronc/apprise)."""
+
+    apprise_urls: list[str] = Field(default_factory=list)
+
+
+class FileConfig(BaseModel):
+    """Application settings loaded from CONFIG_FILE (YAML)."""
+
+    poll_interval_seconds: int = Field(
+        default=DEFAULT_POLL_INTERVAL_SECONDS,
+        ge=10,
+        le=86400,
+    )
+    checkip_url: str = Field(default="https://checkip.amazonaws.com")
+    records: list[Route53RecordConfig]
+    notifications: NotificationsConfig = Field(default_factory=NotificationsConfig)
+
+
 class Settings(BaseSettings):
+    """Process environment: bind address and path to YAML config."""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -54,39 +80,28 @@ class Settings(BaseSettings):
 
     host: str = Field(default="0.0.0.0", validation_alias="HOST")
     port: int = Field(default=8080, ge=1, le=65535, validation_alias="PORT")
-    poll_interval_seconds: int = Field(
-        default=DEFAULT_POLL_INTERVAL_SECONDS,
-        ge=10,
-        le=86400,
-        validation_alias="POLL_INTERVAL_SECONDS",
-        description="Seconds between poll cycles (default 4 hours = 14400)",
-    )
-    checkip_url: str = Field(
-        default="https://checkip.amazonaws.com",
-        validation_alias="CHECKIP_URL",
-    )
-    route53_records_file: Path = Field(
-        ...,
-        validation_alias="ROUTE53_RECORDS_FILE",
-        description="Path to a JSON file listing Route53 records (mounted file in Docker)",
+    config_file: Path = Field(
+        default=Path("config.yaml"),
+        validation_alias="CONFIG_FILE",
+        description="Path to YAML config (poll interval, checkip URL, records, notifications)",
     )
 
-    @staticmethod
-    def _parse_records_payload(raw: str) -> list[dict[str, Any]]:
-        data = json.loads(raw)
-        if not isinstance(data, list):
-            raise ValueError("records file must contain a JSON array")
-        return list(data)
+    def resolved_config_path(self) -> Path:
+        return self.config_file.expanduser().resolve()
 
-    def load_records(self) -> list[Route53RecordConfig]:
-        path = self.route53_records_file.expanduser().resolve()
-        if not path.is_file():
-            raise ValueError(
-                f"ROUTE53_RECORDS_FILE does not exist or is not a file: {path}"
-            )
-        raw = path.read_text(encoding="utf-8")
-        items = self._parse_records_payload(raw)
-        return [Route53RecordConfig.model_validate(item) for item in items]
+
+def load_file_config(path: Path) -> FileConfig:
+    """Load and validate YAML from ``path``."""
+    path = path.expanduser().resolve()
+    if not path.is_file():
+        raise ValueError(f"CONFIG_FILE does not exist or is not a file: {path}")
+    raw = path.read_text(encoding="utf-8")
+    data = yaml.safe_load(raw)
+    if data is None:
+        raise ValueError("config file is empty")
+    if not isinstance(data, dict):
+        raise ValueError("config file must contain a YAML mapping at the top level")
+    return FileConfig.model_validate(data)
 
 
 @lru_cache

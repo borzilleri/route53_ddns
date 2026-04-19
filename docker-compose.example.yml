@@ -1,5 +1,5 @@
 # Example Compose stack: copy to docker-compose.yml and adjust paths/secrets.
-#   cp examples/records.example.json records.json
+#   cp examples/config.example.yaml config.yaml
 #   # create aws_credentials.ini (INI shared-credentials format) — do not commit secrets
 #
 #   docker compose -f docker-compose.example.yml up --build
@@ -17,16 +17,11 @@ services:
     environment:
       HOST: "0.0.0.0"
       PORT: "8080"
-      # 4 hours (14400s) — matches application default; omit to use default from code.
-      POLL_INTERVAL_SECONDS: "14400"
-      CHECKIP_URL: "https://checkip.amazonaws.com"
-      # Path *inside the container* — must match the right-hand side of the records volume mount.
-      ROUTE53_RECORDS_FILE: /config/records.json
+      # CONFIG_FILE defaults to /config.yaml in the image; override only if needed.
       # Compose mounts the secret below to /run/secrets/aws_credentials by default.
       AWS_SHARED_CREDENTIALS_FILE: /run/secrets/aws_credentials
       AWS_DEFAULT_REGION: us-east-1
     secrets:
       - aws_credentials
     volumes:
-      # Route53 record list (JSON array). Edit records.json on the host; bind-mount is read-only.
-      - ./records.json:/config/records.json:ro
+      - ./config.yaml:/config.yaml:ro

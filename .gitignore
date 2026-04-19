@@ -9,4 +9,4 @@ dist/
 build/
 .env
 aws_credentials.ini
-records.json
+config.yaml

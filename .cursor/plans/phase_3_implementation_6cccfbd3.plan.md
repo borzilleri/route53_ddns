@@ -4,13 +4,13 @@ overview: JSON status API per contract; YAML config via CONFIG_FILE (default con
 todos:
   - id: yaml-config
     content: CONFIG_FILE env; code default config.yaml; Dockerfile ENV CONFIG_FILE=/config.yaml; move poll_interval_seconds, checkip_url, records into YAML; migrate from ROUTE53_RECORDS_FILE JSON; conftest, compose, .env.example, README
-    status: pending
+    status: completed
   - id: api-status
     content: GET endpoint; JSON lastUpdated + records[].host / lastUpdated per .plan.md; nulls if never updated; tests
-    status: pending
+    status: completed
   - id: apprise
     content: Apprise URLs in YAML; single aggregated notify after poll_cycle on DNS update or error; tests with mocks
-    status: pending
+    status: completed
 isProject: false
 ---
 

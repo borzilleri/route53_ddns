@@ -1,0 +1,15 @@
+# Copy to config.yaml in the project root (or set CONFIG_FILE). See README.
+
+poll_interval_seconds: 14400
+checkip_url: https://checkip.amazonaws.com
+
+records:
+  - hosted_zone_id: Z123EXAMPLEABCDEF
+    record_name: dyn.example.com.
+    ttl: 300
+
+# Optional: Apprise notification URLs (https://github.com/caronc/apprise)
+notifications:
+  apprise_urls: []
+  # - tgram://bot-token/chat-id
+  # - mailto://user:pass@smtp.example.com?to=ops@example.com

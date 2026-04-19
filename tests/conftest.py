@@ -1,10 +1,9 @@
-import json
-
 import pytest
+import yaml
 
 
 @pytest.fixture(autouse=True)
-def env_records(monkeypatch, tmp_path):
+def env_config(monkeypatch, tmp_path):
     from route53_ddns.config import clear_settings_cache
 
     records = [
@@ -14,9 +13,15 @@ def env_records(monkeypatch, tmp_path):
             "ttl": 300,
         }
     ]
-    records_file = tmp_path / "records.json"
-    records_file.write_text(json.dumps(records), encoding="utf-8")
-    monkeypatch.setenv("ROUTE53_RECORDS_FILE", str(records_file))
+    payload = {
+        "poll_interval_seconds": 14400,
+        "checkip_url": "https://checkip.amazonaws.com",
+        "records": records,
+        "notifications": {"apprise_urls": []},
+    }
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(yaml.safe_dump(payload), encoding="utf-8")
+    monkeypatch.setenv("CONFIG_FILE", str(config_file))
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")

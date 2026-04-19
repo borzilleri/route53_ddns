@@ -1,7 +1,0 @@
-[
-  {
-    "hosted_zone_id": "Z123EXAMPLEABCDEF",
-    "record_name": "dyn.example.com.",
-    "ttl": 300
-  }
-]
