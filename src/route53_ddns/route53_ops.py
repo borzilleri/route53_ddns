@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -19,6 +20,19 @@ def normalize_fqdn(name: str) -> str:
     return n if n.endswith(".") else f"{n}."
 
 
+# Route53 returns some characters in DNS master-file octal form (e.g. * as \052).
+_DNS_OCTAL_ESCAPE_RE = re.compile(r"\\([0-7]{3})")
+
+
+def unescape_route53_dns_name(name: str) -> str:
+    """Decode DNS-style \\ooo octal escapes in names from ListResourceRecordSets."""
+
+    def _repl(m: re.Match[str]) -> str:
+        return chr(int(m.group(1), 8))
+
+    return _DNS_OCTAL_ESCAPE_RE.sub(_repl, name)
+
+
 def list_a_record_ip(client: Any, hosted_zone_id: str, record_name: str) -> str | None:
     """Return IPv4 for the first A record at record_name, or None if missing."""
     fqdn = normalize_fqdn(record_name)
@@ -26,7 +40,8 @@ def list_a_record_ip(client: Any, hosted_zone_id: str, record_name: str) -> str 
     try:
         for page in paginator.paginate(HostedZoneId=hosted_zone_id):
             for rr in page.get("ResourceRecordSets", []):
-                if rr.get("Name") == fqdn and rr.get("Type") == "A":
+                api_name = unescape_route53_dns_name(rr.get("Name") or "")
+                if api_name == fqdn and rr.get("Type") == "A":
                     values = rr.get("ResourceRecords") or []
                     if not values:
                         return None

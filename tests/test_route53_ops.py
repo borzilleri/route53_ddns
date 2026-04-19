@@ -3,11 +3,41 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-from route53_ddns.route53_ops import format_txt_rdata, normalize_fqdn, upsert_a_and_txt
+from route53_ddns.route53_ops import (
+    format_txt_rdata,
+    list_a_record_ip,
+    normalize_fqdn,
+    unescape_route53_dns_name,
+    upsert_a_and_txt,
+)
 
 
 def test_normalize_fqdn_adds_trailing_dot():
     assert normalize_fqdn("dyn.example.com") == "dyn.example.com."
+
+
+def test_unescape_route53_dns_name_wildcard():
+    assert unescape_route53_dns_name(r"\052.example.com.") == "*.example.com."
+
+
+def test_list_a_record_ip_matches_octal_escaped_wildcard():
+    client = MagicMock()
+    paginator = MagicMock()
+    client.get_paginator.return_value = paginator
+    paginator.paginate.return_value = iter(
+        [
+            {
+                "ResourceRecordSets": [
+                    {
+                        "Name": r"\052.example.com.",
+                        "Type": "A",
+                        "ResourceRecords": [{"Value": "203.0.113.1"}],
+                    }
+                ]
+            }
+        ]
+    )
+    assert list_a_record_ip(client, "Z1", "*.example.com") == "203.0.113.1"
 
 
 def test_upsert_batches_a_and_txt():
