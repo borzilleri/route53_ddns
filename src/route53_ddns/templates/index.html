@@ -17,6 +17,9 @@
     .meta dl { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 1.25rem; margin: 0; }
     .meta dt { color: #555; }
     .meta dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .meta-actions { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e4e8; }
+    .instant { display: flex; flex-direction: column; gap: 0.2rem; }
+    .instant .dt-rel { font-size: 0.88rem; color: #555; }
     table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e4e8; border-radius: 8px; overflow: hidden; }
     th, td { text-align: left; padding: 0.65rem 0.85rem; border-bottom: 1px solid #eee; font-variant-numeric: tabular-nums; }
     th { background: #fafbfc; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.03em; color: #444; }
@@ -38,10 +41,29 @@
       <dt>Current public IPv4</dt>
       <dd>{{ current_public_ip or "—" }}</dd>
       <dt>Last check</dt>
-      <dd>{% if last_check_at %}{{ last_check_at.isoformat() }}{% else %}—{% endif %}</dd>
+      <dd>
+        {% if last_check_at %}
+        <div class="instant" data-utc="{{ last_check_at.isoformat() }}">
+          <time class="dt-abs" datetime="{{ last_check_at.isoformat() }}"></time>
+          <span class="dt-rel" aria-label="Relative time"></span>
+        </div>
+        {% else %}—{% endif %}
+      </dd>
       <dt>Next check</dt>
-      <dd>{% if next_check_at %}{{ next_check_at.isoformat() }}{% else %}—{% endif %}</dd>
+      <dd>
+        {% if next_check_at %}
+        <div class="instant" data-utc="{{ next_check_at.isoformat() }}">
+          <time class="dt-abs" datetime="{{ next_check_at.isoformat() }}"></time>
+          <span class="dt-rel" aria-label="Relative time"></span>
+        </div>
+        {% else %}—{% endif %}
+      </dd>
     </dl>
+    <div class="meta-actions">
+      <form method="post" action="/records/update-all">
+        <button type="submit" {% if not any_row_out_of_date %}disabled{% endif %}>Update all</button>
+      </form>
+    </div>
   </section>
 
   <table>
@@ -56,20 +78,27 @@
     </thead>
     <tbody>
       {% for r in records %}
-      {% set in_sync = current_public_ip and r.route53_ip and current_public_ip == r.route53_ip %}
       <tr>
         <td><code>{{ r.record_name }}</code></td>
         <td>{{ current_public_ip or "—" }}</td>
         <td>{{ r.route53_ip or "—" }}</td>
-        <td>{% if r.last_dns_update_at %}{{ r.last_dns_update_at.isoformat() }}{% else %}—{% endif %}</td>
+        <td>
+          {% if r.last_dns_update_at %}
+          <div class="instant" data-utc="{{ r.last_dns_update_at.isoformat() }}">
+            <time class="dt-abs" datetime="{{ r.last_dns_update_at.isoformat() }}"></time>
+            <span class="dt-rel" aria-label="Relative time"></span>
+          </div>
+          {% else %}—{% endif %}
+        </td>
         <td>
           <form method="post" action="/records/{{ r.index }}/update">
-            <button type="submit" {% if in_sync %}disabled{% endif %}>Update</button>
+            <button type="submit" {% if not r.needs_update %}disabled{% endif %}>Update</button>
           </form>
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+  <script src="/static/datetime_ui.js" defer></script>
 </body>
 </html>

@@ -8,11 +8,12 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from route53_ddns.config import Settings, clear_settings_cache, get_settings
 from route53_ddns.logging_config import setup_logging
-from route53_ddns.poller import manual_update_index, poller_loop
+from route53_ddns.poller import manual_update_all, manual_update_index, poller_loop
 from route53_ddns.route53_ops import verify_credentials
 from route53_ddns.state import AppState, RecordRuntime
 
@@ -60,6 +61,11 @@ def build_app(settings: Settings) -> FastAPI:
         logger.info("Shutdown complete")
 
     app = FastAPI(title="route53-ddns", lifespan=lifespan)
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(BASE_DIR / "static")),
+        name="static",
+    )
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request) -> HTMLResponse:
@@ -80,6 +86,17 @@ def build_app(settings: Settings) -> FastAPI:
             )
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
+        return RedirectResponse(url="/", status_code=303)
+
+    @app.post("/records/update-all")
+    async def trigger_update_all() -> RedirectResponse:
+        if http_client is None:
+            raise HTTPException(503, "Service not ready")
+        await manual_update_all(
+            http_client,
+            state,
+            settings.checkip_url,
+        )
         return RedirectResponse(url="/", status_code=303)
 
     return app

@@ -11,6 +11,18 @@ if TYPE_CHECKING:
 from route53_ddns.config import DEFAULT_POLL_INTERVAL_SECONDS
 
 
+def record_needs_update(
+    current_public_ip: str | None,
+    route53_ip: str | None,
+) -> bool:
+    """True when the per-row Update control should be enabled (not in sync)."""
+    return not (
+        current_public_ip is not None
+        and route53_ip is not None
+        and current_public_ip == route53_ip
+    )
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -43,8 +55,13 @@ class AppState:
                     "record_name": r.config.record_name,
                     "route53_ip": r.route53_ip,
                     "last_dns_update_at": r.last_dns_update_at,
+                    "needs_update": record_needs_update(
+                        self.current_public_ip,
+                        r.route53_ip,
+                    ),
                 }
             )
+        any_row_out_of_date = any(row["needs_update"] for row in rows)
         return {
             "current_public_ip": self.current_public_ip,
             "last_check_at": self.last_check_at,
@@ -52,4 +69,5 @@ class AppState:
             "poll_interval_seconds": self.poll_interval_seconds,
             "records": rows,
             "last_error": self.last_error,
+            "any_row_out_of_date": any_row_out_of_date,
         }

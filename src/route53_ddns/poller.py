@@ -162,6 +162,50 @@ async def manual_update_index(
         state.next_check_at = next_scheduled(done, state.poll_interval_seconds)
 
 
+async def manual_update_all(
+    http: httpx.AsyncClient,
+    state: AppState,
+    checkip_url: str,
+) -> None:
+    public_ip = await fetch_public_ip(http, checkip_url)
+    r53 = get_route53_client()
+    async with state.lock:
+        n = len(state.records)
+        interval = state.poll_interval_seconds
+        state.last_error = None
+
+    for idx in range(n):
+        try:
+            await refresh_route53_ip_at(r53, state, idx)
+            async with state.lock:
+                aws_ip = state.records[idx].route53_ip
+            if aws_ip == public_ip:
+                async with state.lock:
+                    name = state.records[idx].config.record_name
+                logger.info(
+                    "manual update all: skip %s (already %s)",
+                    name,
+                    public_ip,
+                )
+                continue
+            await apply_update_at(r53, state, idx, public_ip)
+        except Exception as e:  # noqa: BLE001
+            logger.error(
+                "manual update all record index %s: %s",
+                idx,
+                e,
+                exc_info=True,
+            )
+            async with state.lock:
+                state.last_error = str(e)
+
+    done = utcnow()
+    async with state.lock:
+        state.current_public_ip = public_ip
+        state.last_check_at = done
+        state.next_check_at = next_scheduled(done, interval)
+
+
 async def poller_loop(
     http: httpx.AsyncClient,
     settings: "Settings",
