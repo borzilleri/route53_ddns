@@ -60,6 +60,8 @@ uvicorn route53_ddns.main:create_app --factory --host 0.0.0.0 --port 8080
 
 ## Status API
 
+`GET /api/update-check` returns JSON describing the running version and (when `GITHUB_REPOSITORY` is set) whether a newer GitHub Release exists (`update_available`, `latest_version`, `release_url`).
+
 `GET /api/status` returns JSON:
 
 - `lastUpdated` — ISO-8601 UTC time of the most recent successful DNS update among configured records, or `null` if none yet.
@@ -67,10 +69,31 @@ uvicorn route53_ddns.main:create_app --factory --host 0.0.0.0 --port 8080
 
 ## Docker
 
+### Container image (GHCR)
+
+Published images are built and pushed to **GitHub Container Registry** when you **publish a GitHub Release**. The workflow is [`.github/workflows/release-ghcr.yml`](.github/workflows/release-ghcr.yml).
+
+- **Image tags** on GHCR match the GitHub release tag (for example `v1.2.3` and, for stable non-prerelease releases, `latest`).
+- **`APP_VERSION` inside the image** is the release tag **normalized in CI** (a single leading `v` is stripped so the app reports a semver-friendly version like `1.2.3`).
+
+Pull (replace `OWNER` and `REPO` with your fork or upstream):
+
+```bash
+docker pull ghcr.io/OWNER/REPO:<release-tag>
+```
+
+### Local build
+
 Build:
 
 ```bash
 docker build -t route53-ddns .
+```
+
+Optional: pass a version label for local builds (defaults to `dev` in the image):
+
+```bash
+docker build --build-arg APP_VERSION=1.2.3 -t route53-ddns .
 ```
 
 Run with a **bind-mounted** config file and AWS credentials file (paths on the host → paths in the container):
@@ -141,6 +164,9 @@ See [`.env.example`](.env.example) for **`HOST`**, **`PORT`**, **`CONFIG_FILE`**
 | -------- | ----- |
 | `HOST` / `PORT` | Bind address for the web UI (defaults `0.0.0.0` / `8080`). |
 | `CONFIG_FILE` | Path to YAML config. Default: `config.yaml` (local dev). Docker image defaults to `/config.yaml`. |
+| `APP_VERSION` | Optional override for the reported app version (set automatically in published GHCR images from the release tag). |
+| `GITHUB_REPOSITORY` | Optional `owner/repo`. When set, the footer compares the running version to the latest [GitHub Release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) and may show an update link. |
+| `GITHUB_API_BASE` | Optional (default `https://api.github.com`). Override for tests or GitHub Enterprise API roots. |
 
 `poll_interval_seconds`, `checkip_url`, Route53 `records`, and Apprise URLs are **not** environment variables; use the YAML file.
 

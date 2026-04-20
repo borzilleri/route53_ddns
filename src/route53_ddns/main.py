@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import httpx
@@ -12,6 +14,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from route53_ddns.config import FileConfig, Settings, clear_settings_cache, get_settings, load_file_config
+from route53_ddns.github_release import (
+    fetch_latest_release,
+    is_remote_newer,
+    normalize_version_tag,
+    split_github_repository,
+)
 from route53_ddns.logging_config import setup_logging
 from route53_ddns.poller import manual_update_all, manual_update_index, poller_loop
 from route53_ddns.route53_ops import verify_credentials
@@ -23,6 +31,16 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+@dataclass
+class UpdateCheckRuntime:
+    """In-memory cache for GET /api/update-check (GitHub Releases)."""
+
+    ttl_seconds: float = 600.0
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    cached_at_monotonic: float = 0.0
+    cached_payload: dict | None = None
+
+
 def build_app(settings: Settings, file_config: FileConfig) -> FastAPI:
     records_cfg = file_config.records
     state = AppState(poll_interval_seconds=file_config.poll_interval_seconds)
@@ -32,6 +50,7 @@ def build_app(settings: Settings, file_config: FileConfig) -> FastAPI:
     stop_event: asyncio.Event | None = None
     poller_task: asyncio.Task | None = None
     http_client: httpx.AsyncClient | None = None
+    update_check_runtime = UpdateCheckRuntime()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -77,6 +96,74 @@ def build_app(settings: Settings, file_config: FileConfig) -> FastAPI:
     async def api_status() -> dict:
         async with state.lock:
             return state.status_api_dict()
+
+    @app.get("/api/update-check")
+    async def api_update_check() -> dict:
+        from route53_ddns import __version__ as app_version_str
+
+        base = {"app_version": app_version_str}
+        if not settings.github_repository:
+            return {
+                **base,
+                "github_repository_configured": False,
+                "update_available": False,
+            }
+
+        if http_client is None:
+            return {
+                **base,
+                "github_repository_configured": True,
+                "update_available": False,
+                "error": "Service not ready",
+            }
+
+        owner, repo = split_github_repository(settings.github_repository)
+
+        async with update_check_runtime.lock:
+            now = time.monotonic()
+            if (
+                update_check_runtime.cached_payload is not None
+                and (now - update_check_runtime.cached_at_monotonic)
+                < update_check_runtime.ttl_seconds
+            ):
+                return update_check_runtime.cached_payload
+
+            try:
+                raw_tag, release_url = await fetch_latest_release(
+                    http_client,
+                    settings.github_api_base,
+                    owner,
+                    repo,
+                )
+                latest_norm = normalize_version_tag(raw_tag)
+                update_available = is_remote_newer(raw_tag, app_version_str)
+                payload = {
+                    **base,
+                    "github_repository_configured": True,
+                    "latest_version": latest_norm,
+                    "release_url": release_url,
+                    "update_available": update_available,
+                }
+            except httpx.HTTPStatusError as e:
+                logger.warning("GitHub API HTTP error: %s", e)
+                payload = {
+                    **base,
+                    "github_repository_configured": True,
+                    "update_available": False,
+                    "error": f"GitHub API error: {e.response.status_code}",
+                }
+            except Exception as e:  # noqa: BLE001
+                logger.warning("GitHub API request failed: %s", e, exc_info=True)
+                payload = {
+                    **base,
+                    "github_repository_configured": True,
+                    "update_available": False,
+                    "error": str(e),
+                }
+
+            update_check_runtime.cached_payload = payload
+            update_check_runtime.cached_at_monotonic = time.monotonic()
+            return payload
 
     @app.post("/records/{index}/update")
     async def trigger_update(index: int) -> RedirectResponse:

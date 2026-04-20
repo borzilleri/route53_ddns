@@ -85,6 +85,40 @@ class Settings(BaseSettings):
         validation_alias="CONFIG_FILE",
         description="Path to YAML config (poll interval, checkip URL, records, notifications)",
     )
+    github_repository: str | None = Field(
+        default=None,
+        validation_alias="GITHUB_REPOSITORY",
+        description="owner/repo for GitHub Releases API (optional; enables update-available footer)",
+    )
+    github_api_base: str = Field(
+        default="https://api.github.com",
+        validation_alias="GITHUB_API_BASE",
+        description="GitHub API base URL (override for tests or GitHub Enterprise)",
+    )
+
+    @field_validator("github_repository", mode="before")
+    @classmethod
+    def empty_github_repo(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
+
+    @field_validator("github_repository", mode="after")
+    @classmethod
+    def validate_github_repository(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        parts = v.strip().split("/")
+        if len(parts) != 2 or not parts[0] or not parts[1]:
+            raise ValueError("GITHUB_REPOSITORY must be in the form owner/repo")
+        return f"{parts[0].strip()}/{parts[1].strip()}"
+
+    @field_validator("github_api_base", mode="after")
+    @classmethod
+    def strip_api_base(cls, v: str) -> str:
+        return v.rstrip("/")
 
     def resolved_config_path(self) -> Path:
         return self.config_file.expanduser().resolve()
