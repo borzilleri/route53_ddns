@@ -52,6 +52,46 @@ def list_a_record_ip(client: Any, hosted_zone_id: str, record_name: str) -> str 
     return None
 
 
+def list_txt_record_raw(client: Any, hosted_zone_id: str, record_name: str) -> str | None:
+    """Return the first TXT rdata string at record_name, or None if missing."""
+    fqdn = normalize_fqdn(record_name)
+    paginator = client.get_paginator("list_resource_record_sets")
+    try:
+        for page in paginator.paginate(HostedZoneId=hosted_zone_id):
+            for rr in page.get("ResourceRecordSets", []):
+                api_name = unescape_route53_dns_name(rr.get("Name") or "")
+                if api_name == fqdn and rr.get("Type") == "TXT":
+                    values = rr.get("ResourceRecords") or []
+                    if not values:
+                        return None
+                    return (values[0].get("Value") or "").strip() or None
+    except (ClientError, BotoCoreError) as e:
+        logger.error("list_resource_record_sets (TXT) failed: %s", e)
+        raise
+    return None
+
+
+def parse_last_update_from_txt_rdata(raw: str | None) -> datetime | None:
+    """Parse UTC instant from companion TXT rdata (as returned by Route53 API)."""
+    if not raw:
+        return None
+    s = raw.strip()
+    while len(s) >= 2 and s[0] == '"' and s[-1] == '"':
+        s = s[1:-1].strip()
+    s = s.replace('"', "").strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def format_txt_rdata(iso_timestamp: str) -> str:
     """Route53 TXT single string; quote for API."""
     return f'"{iso_timestamp}"'

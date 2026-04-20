@@ -8,7 +8,13 @@ import httpx
 
 from route53_ddns.config import FileConfig, api_host_label
 from route53_ddns.notifications import send_poll_cycle_notification
-from route53_ddns.route53_ops import get_route53_client, list_a_record_ip, upsert_a_and_txt
+from route53_ddns.route53_ops import (
+    get_route53_client,
+    list_a_record_ip,
+    list_txt_record_raw,
+    parse_last_update_from_txt_rdata,
+    upsert_a_and_txt,
+)
 from route53_ddns.state import AppState, utcnow
 
 logger = logging.getLogger(__name__)
@@ -35,9 +41,13 @@ async def refresh_route53_ip_at(r53, state: AppState, index: int) -> None:
         rec = state.records[index]
         zone_id = rec.config.hosted_zone_id
         name = rec.config.record_name
+        txt_name = rec.config.resolved_txt_name()
     ip_val = await asyncio.to_thread(list_a_record_ip, r53, zone_id, name)
+    txt_raw = await asyncio.to_thread(list_txt_record_raw, r53, zone_id, txt_name)
+    parsed_last = parse_last_update_from_txt_rdata(txt_raw)
     async with state.lock:
         state.records[index].route53_ip = ip_val
+        state.records[index].last_dns_update_at = parsed_last
 
 
 async def apply_update_at(

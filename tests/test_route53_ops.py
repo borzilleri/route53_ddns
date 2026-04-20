@@ -7,6 +7,7 @@ from route53_ddns.route53_ops import (
     format_txt_rdata,
     list_a_record_ip,
     normalize_fqdn,
+    parse_last_update_from_txt_rdata,
     unescape_route53_dns_name,
     upsert_a_and_txt,
 )
@@ -66,3 +67,19 @@ def test_upsert_batches_a_and_txt():
 def test_format_txt_rdata_quoted():
     s = format_txt_rdata("2026-04-18T12:00:00Z")
     assert s.startswith('"') and s.endswith('"')
+
+
+def test_parse_last_update_from_txt_rdata_route53_quoted_form():
+    raw = '"2026-04-19T22:52:01Z"'
+    dt = parse_last_update_from_txt_rdata(raw)
+    assert dt is not None
+    assert dt.year == 2026
+    assert dt.month == 4
+    assert dt.day == 19
+    assert dt.hour == 22
+    assert dt.minute == 52
+
+
+def test_parse_last_update_from_txt_rdata_none():
+    assert parse_last_update_from_txt_rdata(None) is None
+    assert parse_last_update_from_txt_rdata("") is None
