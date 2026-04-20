@@ -37,6 +37,12 @@ route53-ddns = "route53_ddns.main:run"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+route53_ddns = [
+  "static/*",
+  "templates/*",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
