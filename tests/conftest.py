@@ -25,6 +25,8 @@ def env_config(monkeypatch, tmp_path):
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "testing")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "testing")
     monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    # Disable upstream GitHub update check unless a test sets GITHUB_REPOSITORY.
+    monkeypatch.setenv("GITHUB_REPOSITORY", "")
     clear_settings_cache()
     yield
     clear_settings_cache()

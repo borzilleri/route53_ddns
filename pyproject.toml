@@ -21,6 +21,9 @@ dependencies = [
   "pyyaml>=6.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/borzilleri/route53_ddns"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",

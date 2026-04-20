@@ -2,7 +2,8 @@
 #   cp examples/config.example.yaml config.yaml
 #   # create aws_credentials.ini (INI shared-credentials format) — do not commit secrets
 #
-#   docker compose -f docker-compose.example.yml up --build
+#   docker compose -f docker-compose.example.yml pull
+#   docker compose -f docker-compose.example.yml up
 
 secrets:
   aws_credentials:
@@ -10,8 +11,7 @@ secrets:
 
 services:
   route53-ddns:
-    build: .
-    image: route53-ddns:local
+    image: ghcr.io/borzilleri/route53_ddns:latest
     ports:
       - "8080:8080"
     environment:

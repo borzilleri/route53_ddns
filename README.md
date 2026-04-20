@@ -60,7 +60,7 @@ uvicorn route53_ddns.main:create_app --factory --host 0.0.0.0 --port 8080
 
 ## Status API
 
-`GET /api/update-check` returns JSON describing the running version and (when `GITHUB_REPOSITORY` is set) whether a newer GitHub Release exists (`update_available`, `latest_version`, `release_url`).
+`GET /api/update-check` returns JSON describing the running version and whether a newer GitHub Release exists (`update_available`, `latest_version`, `release_url`). By default the app uses the canonical repo from `pyproject.toml` (`borzilleri/route53_ddns`); override with `GITHUB_REPOSITORY`, or set `GITHUB_REPOSITORY` to empty to disable the check.
 
 `GET /api/status` returns JSON:
 
@@ -115,8 +115,11 @@ docker run --rm \
 An example stack is in **[docker-compose.example.yml](docker-compose.example.yml)**. Copy `examples/config.example.yaml` to `config.yaml`, add an `aws_credentials.ini` beside it (shared-credentials format), then:
 
 ```bash
-docker compose -f docker-compose.example.yml up --build
+docker compose -f docker-compose.example.yml pull
+docker compose -f docker-compose.example.yml up
 ```
+
+The example pulls **`ghcr.io/borzilleri/route53_ddns:latest`** (see [Container image (GHCR)](#container-image-ghcr)). Authenticate to GHCR if the image is private (`docker login ghcr.io`).
 
 The example declares a **Compose secret** (`secrets.aws_credentials.file`) and attaches it to the service; Docker Compose mounts it at **`/run/secrets/aws_credentials`**, which matches `AWS_SHARED_CREDENTIALS_FILE`. Adjust paths and environment as needed.
 
@@ -165,7 +168,7 @@ See [`.env.example`](.env.example) for **`HOST`**, **`PORT`**, **`CONFIG_FILE`**
 | `HOST` / `PORT` | Bind address for the web UI (defaults `0.0.0.0` / `8080`). |
 | `CONFIG_FILE` | Path to YAML config. Default: `config.yaml` (local dev). Docker image defaults to `/config.yaml`. |
 | `APP_VERSION` | Optional override for the reported app version (set automatically in published GHCR images from the release tag). |
-| `GITHUB_REPOSITORY` | Optional `owner/repo`. When set, the footer compares the running version to the latest [GitHub Release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) and may show an update link. |
+| `GITHUB_REPOSITORY` | Optional `owner/repo` for the [latest release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release) check. **Default** (when unset): `borzilleri/route53_ddns` from package metadata. **Override** with your fork. **Disable** by setting to empty (`GITHUB_REPOSITORY=`) so only the app version is shown. |
 | `GITHUB_API_BASE` | Optional (default `https://api.github.com`). Override for tests or GitHub Enterprise API roots. |
 
 `poll_interval_seconds`, `checkip_url`, Route53 `records`, and Apprise URLs are **not** environment variables; use the YAML file.

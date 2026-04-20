@@ -8,8 +8,12 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from route53_ddns.package_meta import github_repository_slug_from_metadata
+
 # Default time between public-IP checks and Route53 reconciliation.
 DEFAULT_POLL_INTERVAL_SECONDS = 14_400  # 4 hours
+
+_DEFAULT_GITHUB_REPOSITORY = github_repository_slug_from_metadata()
 
 
 def default_txt_record_name(a_record_fqdn: str) -> str:
@@ -86,9 +90,9 @@ class Settings(BaseSettings):
         description="Path to YAML config (poll interval, checkip URL, records, notifications)",
     )
     github_repository: str | None = Field(
-        default=None,
+        default=_DEFAULT_GITHUB_REPOSITORY,
         validation_alias="GITHUB_REPOSITORY",
-        description="owner/repo for GitHub Releases API (optional; enables update-available footer)",
+        description="owner/repo for GitHub Releases API; unset uses pyproject Repository URL; empty disables",
     )
     github_api_base: str = Field(
         default="https://api.github.com",
