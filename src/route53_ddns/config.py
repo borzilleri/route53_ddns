@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,22 @@ from route53_ddns.package_meta import github_repository_slug_from_metadata
 DEFAULT_POLL_INTERVAL_SECONDS = 14_400  # 4 hours
 
 _DEFAULT_GITHUB_REPOSITORY = github_repository_slug_from_metadata()
+
+FILE_ENV_VARS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+
+
+def load_env_from_files() -> None:
+    """For each NAME with NAME_FILE set, move the file's contents into NAME (e.g. Docker secrets)."""
+    for name in FILE_ENV_VARS:
+        path = os.environ.pop(f"{name}_FILE", None)
+        if not path:
+            continue
+        if os.environ.get(name):
+            raise ValueError(f"Both {name} and {name}_FILE are set; use only one")
+        try:
+            os.environ[name] = Path(path).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as e:
+            raise ValueError(f"{name}_FILE could not be read: {path}: {e}") from e
 
 
 def default_txt_record_name(a_record_fqdn: str) -> str:

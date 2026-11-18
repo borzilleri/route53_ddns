@@ -144,6 +144,27 @@ environment:
 
 Do **not** bake credentials into the image. Restrict file permissions on the host; Compose secrets are mounted read-only inside the container.
 
+### Per-value secrets (`*_FILE`)
+
+Alternatively, store each credential value in its own file and point the app at it with a `_FILE` variable. At startup the app reads `AWS_ACCESS_KEY_ID_FILE` / `AWS_SECRET_ACCESS_KEY_FILE`, strips surrounding whitespace, and exports the contents as `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. Setting both `NAME` and `NAME_FILE` is an error, as is a missing or unreadable file.
+
+```yaml
+secrets:
+  aws_access_key_id:
+    file: ./aws_access_key_id.txt
+  aws_secret_access_key:
+    file: ./aws_secret_access_key.txt
+
+services:
+  route53-ddns:
+    environment:
+      AWS_ACCESS_KEY_ID_FILE: /run/secrets/aws_access_key_id
+      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/aws_secret_access_key
+    secrets:
+      - aws_access_key_id
+      - aws_secret_access_key
+```
+
 You can also use environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) or an IAM role on AWS (ECS/EC2), as supported by **boto3**.
 
 ## IAM

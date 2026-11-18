@@ -20,6 +20,9 @@ services:
       # CONFIG_FILE defaults to /config.yaml in the image; override only if needed.
       # Compose mounts the secret below to /run/secrets/aws_credentials by default.
       AWS_SHARED_CREDENTIALS_FILE: /run/secrets/aws_credentials
+      # Alternative: one secret per value instead of an INI file (see README "Per-value secrets").
+      # AWS_ACCESS_KEY_ID_FILE: /run/secrets/aws_access_key_id
+      # AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/aws_secret_access_key
       AWS_DEFAULT_REGION: us-east-1
     secrets:
       - aws_credentials

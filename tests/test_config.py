@@ -1,8 +1,37 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 
-from route53_ddns.config import FileConfig, load_file_config
+from route53_ddns.config import FileConfig, load_env_from_files, load_file_config
+
+
+def test_load_env_from_files_reads_and_strips(monkeypatch, tmp_path):
+    secret = tmp_path / "key_id"
+    secret.write_text("AKIAFROMFILE\n", encoding="utf-8")
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID")
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID_FILE", str(secret))
+    load_env_from_files()
+    assert os.environ["AWS_ACCESS_KEY_ID"] == "AKIAFROMFILE"
+    assert os.environ["AWS_SECRET_ACCESS_KEY"] == "testing"
+    load_env_from_files()
+    assert os.environ["AWS_ACCESS_KEY_ID"] == "AKIAFROMFILE"
+
+
+def test_load_env_from_files_rejects_both_set(monkeypatch, tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("x", encoding="utf-8")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY_FILE", str(secret))
+    with pytest.raises(ValueError, match="Both AWS_SECRET_ACCESS_KEY and AWS_SECRET_ACCESS_KEY_FILE"):
+        load_env_from_files()
+
+
+def test_load_env_from_files_missing_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY")
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY_FILE", str(tmp_path / "nope"))
+    with pytest.raises(ValueError, match="AWS_SECRET_ACCESS_KEY_FILE could not be read"):
+        load_env_from_files()
 
 
 def test_load_file_config_ok(tmp_path):

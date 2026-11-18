@@ -13,7 +13,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from route53_ddns.config import FileConfig, Settings, clear_settings_cache, get_settings, load_file_config
+from route53_ddns.config import (
+    FileConfig,
+    Settings,
+    clear_settings_cache,
+    get_settings,
+    load_env_from_files,
+    load_file_config,
+)
 from route53_ddns.github_release import (
     fetch_latest_release,
     is_remote_newer,
@@ -195,6 +202,7 @@ def build_app(settings: Settings, file_config: FileConfig) -> FastAPI:
 
 
 def create_app() -> FastAPI:
+    load_env_from_files()
     settings = get_settings()
     file_config = load_file_config(settings.resolved_config_path())
     return build_app(settings, file_config)
